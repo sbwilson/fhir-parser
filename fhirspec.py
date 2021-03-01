@@ -447,7 +447,7 @@ class FHIRCodeSystem(object):
             
             cd = c['code']
             name = '{}-{}'.format(prefix, cd) if prefix and not cd.startswith(prefix) else cd
-            code_name = self.spec.safe_enum_name(cd)
+            code_name = self.spec.safe_enum_name(cd,self.spec.settings.camelcase_firstLetter)
             if len(code_name) < 1:
                 raise Exception(f"Unable to create a member name for enum '{cd}' in {self.url}. You may need to add '{cd}' to mappings.enum_map")
             c['name'] = code_name

@@ -45,24 +45,29 @@ class FHIRRenderer(object):
         :param template_name: The Jinja2 template to render, located in settings.tpl_base
         :param target_path: Output path
         """
-        try:
-            template = self.jinjaenv.get_template(template_name)
-        except TemplateNotFound as e:
-            logger.error("Template \"{}\" not found in «{}», cannot render"
-                .format(template_name, self.settings.tpl_base))
-            return
+        templates = template_name
+        if isinstance(template_name,str):
+            templates = [ template_name ]
         
-        if not target_path:
-            raise Exception("No target filepath provided")
-        dirpath = os.path.dirname(target_path)
-        if not os.path.isdir(dirpath):
-            os.makedirs(dirpath)
+        for template in templates:
+            try:
+                template = self.jinjaenv.get_template(template)
+            except TemplateNotFound as e:
+                logger.error("Template \"{}\" not found in «{}», cannot render"
+                    .format(template, self.settings.tpl_base))
+                return
         
-        with io.open(target_path, 'w', encoding='utf-8') as handle:
-            logger.info('Writing {}'.format(target_path))
-            rendered = template.render(data)
-            handle.write(rendered)
-            # handle.write(rendered.encode('utf-8'))
+            if not target_path:
+                raise Exception("No target filepath provided")
+            dirpath = os.path.dirname(target_path)
+            if not os.path.isdir(dirpath):
+                os.makedirs(dirpath)
+        
+            with io.open(target_path, 'w', encoding='utf-8') as handle:
+                logger.info('Writing {}'.format(target_path))
+                rendered = template.render(data)
+                handle.write(rendered)
+                # handle.write(rendered.encode('utf-8'))
 
 
 class FHIRStructureDefinitionRenderer(FHIRRenderer):
@@ -96,12 +101,14 @@ class FHIRStructureDefinitionRenderer(FHIRRenderer):
                 'classes': classes
             }
             
-            ptrn = profile.targetname.lower() if self.settings.resource_modules_lowercase else profile.targetname
-            source_path = self.settings.tpl_resource_source
-            target_name = self.settings.tpl_resource_target_ptrn.format(ptrn)
-            target_path = os.path.join(self.settings.tpl_resource_target, target_name)
+            for template in self.settings.tpl_resource_source:
+                extn = os.path.splitext( template )[1][1:]
+                ptrn = profile.targetname.lower() if self.settings.resource_modules_lowercase else profile.targetname
+                source_path = template # self.settings.tpl_resource_source
+                target_name = self.settings.tpl_resource_target_ptrn.format(ptrn, extn)
+                target_path = os.path.join(self.settings.tpl_resource_target, target_name)
             
-            self.do_render(data, source_path, target_path)
+                self.do_render(data, source_path, target_path)
         self.copy_files(os.path.dirname(target_path))
 
 
@@ -148,18 +155,20 @@ class FHIRValueSetRenderer(FHIRRenderer):
             logger.info("Not rendering value sets and code systems since `tpl_codesystems_source` is not set")
             return
         
+        # Fetch the systems:
         systems = [v for k,v in self.spec.codesystems.items()]
-        for system in sorted(systems, key=lambda x: x.name):
-            if not system.generate_enum:
-                continue
-            
-            data = {
-                'info': self.spec.info,
-                'system': system,
-            }
-            target_name = self.settings.tpl_codesystems_target_ptrn.format(system.name)
-            target_path = os.path.join(self.settings.tpl_resource_target, target_name)
-            self.do_render(data, self.settings.tpl_codesystems_source, target_path)
+        data = {
+            'info': self.spec.info,
+            'systems': sorted(systems, key=lambda x: x.name),
+        }
+        logger.info('Want to write {} systems'.format( len(systems) ))
+
+        for template in self.settings.tpl_codesystems_source:
+            extn = os.path.splitext( template )[1][1:]
+            source_path = template # self.settings.tpl_resource_source
+            target_name = self.settings.tpl_codesystems_target_ptrn.format(extn)
+            target_path = os.path.join(self.settings.tpl_resource_target, target_name)        
+            self.do_render(data, source_path, target_path)
 
 
 class FHIRUnitTestRenderer(FHIRRenderer):
